@@ -11,7 +11,6 @@ Job-based **configure** for OpenText Identity Manager 25.4 / Identity Applicatio
 | [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md) | Site engineer implementing from this package |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Deployments run / Jobs configure |
 | [`docs/PORTABILITY.md`](docs/PORTABILITY.md) | What is portable vs site-supplied |
-| [`docs/opentext/`](docs/opentext/) | PM + engineering + email briefs (sanitized) |
 | [`config/site.env.example`](config/site.env.example) | **Single source of truth** for site knobs |
 
 ## Principle
