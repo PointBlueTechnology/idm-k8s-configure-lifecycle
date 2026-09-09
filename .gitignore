@@ -1,0 +1,29 @@
+# Site-specific (never commit live config)
+config/site.env
+config/site.yaml
+manifests/rendered/
+jobs/.wipe-schema-oneshot.yaml
+
+# Backups / dumps / archives
+backups/
+*.zip
+*.dump
+*.sql
+ism-configuration.properties
+ism-state.txt
+encrypt-keys.pkcs12
+*.jks
+*.p12
+*.pkcs12
+k3s.yaml
+k3s.yaml.bak
+
+# Secrets / local junk
+secrets/
+.env
+.DS_Store
+**/.DS_Store
+*.bak
+*.bak-*
+.idea/
+.vscode/

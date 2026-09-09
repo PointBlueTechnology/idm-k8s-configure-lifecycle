@@ -1,0 +1,66 @@
+# Destructive one-shot: DROP SCHEMA public on UA+WFE + reset ism
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: idm-lifecycle-wipe-schema
+  namespace: idm
+  labels:
+    app.kubernetes.io/part-of: idm-lifecycle
+    app.kubernetes.io/component: wipe
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: idm-lifecycle
+        app.kubernetes.io/component: wipe
+    spec:
+      restartPolicy: Never
+      serviceAccountName: idm-lifecycle
+      volumes:
+        - name: shared
+          persistentVolumeClaim:
+            claimName: idm-shared
+        - name: lifecycle
+          configMap:
+            name: idm-lifecycle-scripts
+            defaultMode: 0755
+        - name: lifecycle-lib
+          configMap:
+            name: idm-lifecycle-lib
+            defaultMode: 0444
+      containers:
+        - name: wipe
+          image: identityapplication:idm-4.10.2.0200-81
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "/lifecycle/99-wipe-schema.sh"]
+          env:
+            - name: UA_WFE_DATABASE_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: idm-common-password
+                  key: password
+            - name: PG_HOST
+              value: "192.0.2.10"
+            - name: PG_PORT
+              value: "5432"
+            - name: UA_WFE_DATABASE_USER
+              value: "idmadmin"
+            - name: UA_DATABASE_NAME
+              value: "idmuserappdb"
+            - name: WFE_DATABASE_NAME
+              value: "igaworkflowdb"
+            - name: SHARED_CONFIG
+              value: "/config"
+            - name: LIFECYCLE_LIB
+              value: "/lifecycle/lib/idm-lifecycle-lib.jar"
+          volumeMounts:
+            - name: shared
+              mountPath: /config
+            - name: lifecycle
+              mountPath: /lifecycle
+              readOnly: true
+            - name: lifecycle-lib
+              mountPath: /lifecycle/lib
+              readOnly: true

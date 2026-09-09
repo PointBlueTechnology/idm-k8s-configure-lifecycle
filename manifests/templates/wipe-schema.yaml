@@ -1,0 +1,66 @@
+# Destructive one-shot: DROP SCHEMA public on UA+WFE + reset ism
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${LIFECYCLE_NAME}-wipe-schema
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: ${LIFECYCLE_NAME}
+    app.kubernetes.io/component: wipe
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: ${LIFECYCLE_NAME}
+        app.kubernetes.io/component: wipe
+    spec:
+      restartPolicy: Never
+      serviceAccountName: ${LIFECYCLE_NAME}
+      volumes:
+        - name: shared
+          persistentVolumeClaim:
+            claimName: ${SHARED_PVC_NAME}
+        - name: lifecycle
+          configMap:
+            name: ${LIFECYCLE_NAME}-scripts
+            defaultMode: 0755
+        - name: lifecycle-lib
+          configMap:
+            name: ${LIFECYCLE_NAME}-lib
+            defaultMode: 0444
+      containers:
+        - name: wipe
+          image: ${IMAGE_UA}
+          imagePullPolicy: ${IMAGE_PULL_POLICY}
+          command: ["/bin/bash", "/lifecycle/99-wipe-schema.sh"]
+          env:
+            - name: UA_WFE_DATABASE_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: ${COMMON_PASSWORD_SECRET}
+                  key: ${COMMON_PASSWORD_KEY}
+            - name: PG_HOST
+              value: "${PG_HOST}"
+            - name: PG_PORT
+              value: "${PG_PORT}"
+            - name: UA_WFE_DATABASE_USER
+              value: "${UA_WFE_DATABASE_USER}"
+            - name: UA_DATABASE_NAME
+              value: "${UA_DB_NAME}"
+            - name: WFE_DATABASE_NAME
+              value: "${WFE_DB_NAME}"
+            - name: SHARED_CONFIG
+              value: "${SHARED_CONFIG}"
+            - name: LIFECYCLE_LIB
+              value: "${LIFECYCLE_LIB}"
+          volumeMounts:
+            - name: shared
+              mountPath: /config
+            - name: lifecycle
+              mountPath: /lifecycle
+              readOnly: true
+            - name: lifecycle-lib
+              mountPath: /lifecycle/lib
+              readOnly: true

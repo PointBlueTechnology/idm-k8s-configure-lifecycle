@@ -1,0 +1,38 @@
+# ServiceAccount + Role for lifecycle Jobs (scale UA, read secrets/CMs)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${LIFECYCLE_NAME}
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: ${LIFECYCLE_NAME}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ${LIFECYCLE_NAME}
+  namespace: ${NAMESPACE}
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "list", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/exec", "services", "secrets", "configmaps", "persistentvolumeclaims"]
+    verbs: ["get", "list", "create", "update", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ${LIFECYCLE_NAME}
+  namespace: ${NAMESPACE}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ${LIFECYCLE_NAME}
+subjects:
+  - kind: ServiceAccount
+    name: ${LIFECYCLE_NAME}
+    namespace: ${NAMESPACE}

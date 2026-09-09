@@ -1,0 +1,21 @@
+# Optional YAML mirror of site.env.example (documentation only).
+# Prefer config/site.env for render.sh / apply.sh.
+namespace: idm
+lifecycleName: idm-lifecycle
+publicHost: idm.example.com
+publicBaseUrl: https://idm.example.com
+ingressIp: 192.0.2.20
+engineHost: idm-engine.example.com
+engineIp: 192.0.2.10
+pgHost: 192.0.2.10
+pgPort: 5432
+sharedPvcName: idm-shared
+uaDeploymentName: identityapplications
+imageUa: identityapplication:idm-4.10.2.0200-81
+secrets:
+  commonPassword:
+    name: idm-common-password
+    key: password
+  keystore:
+    name: identity-manager-key-store-pwd
+    key: keystore-pwd

@@ -1,0 +1,39 @@
+# idm-lifecycle Job — smoke (template; render with scripts/render.sh)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: idm-lifecycle-04-smoke
+  namespace: idm
+  labels:
+    app.kubernetes.io/part-of: idm-lifecycle
+    app.kubernetes.io/component: smoke
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: idm-lifecycle
+        app.kubernetes.io/component: smoke
+    spec:
+      restartPolicy: Never
+      serviceAccountName: idm-lifecycle
+      volumes:
+        - name: lifecycle
+          configMap:
+            name: idm-lifecycle-scripts
+            defaultMode: 0755
+      containers:
+        - name: smoke
+          image: curlimages/curl:8.5.0
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "/lifecycle/04-smoke.sh"]
+          env:
+            - name: EXT_HOST
+              value: "idm.example.com"
+            - name: INGRESS_IP
+              value: "192.0.2.20"
+          volumeMounts:
+            - name: lifecycle
+              mountPath: /lifecycle
+              readOnly: true

@@ -1,0 +1,10 @@
+IDM Kubernetes Configure Lifecycle — Reference Implementation
+Copyright (c) 2026 Point Blue Technology / contributors
+
+This repository is a lab-validated reference implementation for collaborating with
+OpenText on a Job-based configure lifecycle for Identity Manager / Identity
+Applications on Kubernetes.
+
+PROVIDED AS-IS, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
+Not an OpenText-supported product or install path.
+Use at your own risk. Backup shared volumes and databases before destructive stages.

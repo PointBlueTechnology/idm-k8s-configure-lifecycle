@@ -1,0 +1,206 @@
+#IDM configuration properties
+#Thu Jun 26 16:24:37 IST 2014
+
+###
+##  Rbpm, rra, landing, and dash redirect urls's
+###
+com.netiq.rbpm.redirect.url=https://___UA_IP___:___UA_TOMCAT_HTTPS_PORT___/IDMProv/oauth
+com.netiq.ualanding.redirect.url=https://___UA_IP___:___UA_TOMCAT_HTTPS_PORT___/landing/com.netiq.ualanding.index/oauth.html
+com.netiq.rpt.rpt-web.redirect.url = https://___RPT_IP___:___RPT_TOMCAT_HTTPS_PORT___/IDMRPT/oauth.html
+com.netiq.idmdash.redirect.url = https://___UA_IP___:___UA_TOMCAT_HTTPS_PORT___/idmdash/oauth.html
+com.netiq.idmadmin.redirect.url = https://___UA_IP___:___UA_TOMCAT_HTTPS_PORT___/idmadmin/oauth.html
+com.netiq.sspr.redirect.url = https://___SSPR_IP___:___SSPR_TOMCAT_HTTPS_PORT___/sspr/public/oauth
+com.netiq.idmdcs.redirect.url = https://___RPT_IP___:___RPT_TOMCAT_HTTPS_PORT___/idmdcs/oauth.html
+eDir.compound.index.set = true
+##Keystore details
+DirectoryService/realms/jndi/params/KEYSTORE_PATH=___IDM_KEYSTORE_PATH___
+com.netiq.idm.ua.ldap.keystore-pwd=___IDM_KEYSTORE_PWD___
+
+# Workflow
+com.netiq.wf.engine.url = https://___UA_IP___:___UA_TOMCAT_HTTPS_PORT___/workflow
+
+## SSO Configuration.
+## Valid values are 'auto', 'NoChange', 'Manual 
+## PKCS8' and 'Manual PKCS12'
+
+com.netiq.idm.ua.sso-configuration=auto
+com.netiq.edir.ncp-port=524
+
+## OSP ketstore file and passwords
+com.netiq.idm.osp.ldap.use-ssl = true
+com.netiq.idm.osp.oauth-keystore.file=/opt/netiq/idm/apps/osp/osp.jks
+com.netiq.idm.osp.oauth-key.pwd=___OSP_JKS_KEY_PWD___
+com.netiq.idm.osp.oauth-keystore.pwd=___OSP_JKS_PWD___
+com.netiq.idm.osp.ldap.admin-dn=___ID_VAULT_ADMIN___
+com.netiq.idm.osp.ldap.admin-pwd=___ID_VAULT_PASSWORD___
+com.netiq.idm.osp.edit.use-ssl=true
+com.netiq.idm.osp.oauth-key-alias=osp
+com.netiq.idm.osp.oauth.accessTokenTTL=60
+com.netiq.idm.osp.as.admins-container-dn=___ADMIN_CONTAINER___
+com.netiq.idm.osp.as.duplicate-resolution-naming-attr=mail
+com.netiq.idm.osp.edit.port=___OSP_TOMCAT_HTTPS_PORT___
+com.netiq.idm.osp.ssl-keystore.file = __OSP_TOMCAT_HOST__/conf/tomcat.ks
+com.netiq.idm.osp.ssl-keystore.pwd = __OSP_SSL_KEYSTORE_PASS__
+
+## IDM APPS Client ID and ClientPass
+##
+com.netiq.rbpm.clientID=rbpm
+com.netiq.idmdash.clientID=idmdash
+com.netiq.idmadmin.clientID=idmadmin
+com.netiq.rpt.clientID=rpt
+com.netiq.dcsdrv.clientID=dcsdrv
+com.netiq.sspr.clientID=sspr
+com.netiq.idmdcs.clientID=idmdcs
+com.netiq.idmengine.clientID=idmengine
+
+## Auth type
+###
+com.netiq.rbpm.response-types = code,client_credentials
+com.netiq.rbpmrest.response-types = password
+com.netiq.ualanding.response-types = token
+com.netiq.dcsdrv.response-types = password
+com.netiq.sspr.response-types = code,token
+com.netiq.rra.response-types = token
+com.netiq.idmdash.response-types = code
+com.netiq.idmadmin.response-types = code
+com.netiq.rpt.response-types = token,password
+com.netiq.sspr.response-types = code,token
+com.netiq.idmdcs.response-types = code
+com.netiq.idmengine.response-types = password
+#com.netiq.sspr.clientPass._attr_obscurity = ENCRYPT
+
+## Service password
+##
+com.netiq.rpt.clientPass = ___SSO_SERVICE_PWD___ 
+com.netiq.dcsdrv.clientPass = ___SSO_SERVICE_PWD___
+com.netiq.idmdash.clientPass = ___SSO_SERVICE_PWD___
+com.netiq.idmadmin.clientPass = ___SSO_SERVICE_PWD___
+com.netiq.rbpm.clientPass = ___SSO_SERVICE_PWD___
+com.netiq.rbpmrest.clientPass = ___SSO_SERVICE_PWD___
+com.netiq.sspr.clientPass = ___SSO_SERVICE_PWD___
+com.netiq.idmdcs.clientPass = ___SSO_SERVICE_PWD___
+com.netiq.idmengine.clientPass = ___SSO_SERVICE_PWD___
+
+com.netiq.rpt.clientPass._attr_obscurity = ENCRYPT
+com.netiq.rbpmrest.clientPass._attr_obscurity = ENCRYPT
+com.netiq.idmengine.clientPass._attr_obscurity = ENCRYPT
+
+# #roles, resources, report, cfg, complains, prd assigned ##admin dn
+##
+RbpmAuthService/rbpm-roles-admin-assigned-identity-dn=___UA_ADMIN___
+RbpmAuthService/rbpm-compliance-admin-assigned-identity-dn=___UA_ADMIN___
+RbpmAuthService/rbpm-prd-admin-assigned-identity-dn=___UA_ADMIN___
+RbpmAuthService/report-admin-assigned-identity-dn=___UA_ADMIN___
+RbpmAuthService/rbpm-rbpm-cfg-admin-assigned-identity-dn=___UA_ADMIN___
+RoleService/nrf-compliance-admin-assigned-identity-dn=___UA_ADMIN___
+RbpmAuthService/rbpm-sec-admin-assigned-identity-dn=___UA_ADMIN___
+RoleService/nrf-role-admin-assigned-identity-dn=___UA_ADMIN___
+RbpmAuthService/rbpm-resources-admin-assigned-identity-dn=___UA_ADMIN___
+com.sssw.fw.security.Locksmith=___UA_ADMIN___
+com.sssw.fw.security.srvprv.Locksmith=___UA_ADMIN___
+
+#com.netiq.idm.osp.oauth-truststore.pwd=___IDM_KEYSTORE_PWD___
+#com.netiq.idm.osp.oauth-truststore.file=/opt/netiq/idm/apps/tomcat/conf/idm.jks
+
+
+###
+###
+##
+DirectoryService/realms/jndi/params/USER_ROOT_CONTAINER=___USER_ROOT_CONTAINER___
+DirectoryService/realms/jndi/params/MANDATORY_SECURE_USER_CONNECTION=true
+DirectoryService/realms/jndi/params/GROUP_OBJECT=groupOfNames
+DirectoryService/realms/jndi/params/USE_PUB_ANON=true
+#
+DirectoryService/realms/jndi/params/SECURE_PORT=___ID_VAULT_LDAPS_PORT___
+#
+DirectoryService/realms/jndi/params/PLAIN_PORT=___ID_VAULT_LDAP_PORT___
+DirectoryService/realms/jndi/params/USE_DYNAMIC_GROUPS=false
+DirectoryService/realms/jndi/params/ROOT_NAME=___ROOT_CONTAINER____
+DirectoryService/realms/jndi/params/GROUP_SEARCH_SCOPE=subtree
+DirectoryService/realms/jndi/params/GROUP_USER_MEMBER_ATTRIB=member
+#User Application Driver DN
+DirectoryService/realms/jndi/params/PROVISION_ROOT=cn=___UA_DRIVER_NAME___,___DRIVERSET_NAME___
+DirectoryService/realms/jndi/params/LOGIN_ATTRIBUTE=cn
+DirectoryService/realms/jndi/params/NAMING_ATTRIBUTE=cn
+DirectoryService/realms/jndi/params/GROUP_ROOT_CONTAINER=___GROUP_ROOT_CONTAINER___
+DirectoryService/realms/jndi/params/CONTAINER_OBJECT=c=countryou=organizationalUnito=organizationdc=domaint=treeRoot
+##eDirectory server IP
+DirectoryService/realms/jndi/params/AUTHORITY=___ID_VAULT_HOST___
+DirectoryService/realms/jndi/params/USER_SEARCH_SCOPE=subtree
+DirectoryService/realms/jndi/params/DYNAMIC_GROUP_OBJECT=dynamicGroup
+DirectoryService/realms/jndi/params/USER_GROUP_MEMBER_ATTRIB=groupMembership
+DirectoryService/realms/jndi/params/MANDATORY_SECURE_ADMIN_CONNECTION=true
+
+
+#UA
+com.novell.idm.ldap.admin.user = ___ID_VAULT_ADMIN___
+com.novell.idm.ldap.admin.pass._attr_obscurity = NONE
+com.novell.idm.ldap.admin.pass = ___ID_VAULT_PASSWORD___
+
+
+#User Application context name
+com.netiq.idm.ua.context-name=IDMProv
+
+#forgot password link
+#If sspr is installed on same server this value should be true and pwdmgt provider should be sspr.
+com.netiq.idm.sspr.edit.show-forgotten-password=false
+com.netiq.idm.pwdmgt.provider=sspr
+com.netiq.idm.osp.login.sign-in-help-url = https://___SSPR_IP___:___SSPR_TOMCAT_HTTPS_PORT___/sspr/public
+
+#
+com.netiq.idm.session-timeout=1200
+com.netiq.idm.as.restrict-to-contexts=false
+com.netiq.idm.pwd-mgt=none
+com.netiq.ualanding.dash.url=/dash
+com.netiq.rra.landing.url=/idmdash/#/landing
+com.netiq.rpt.landing.url=/idmdash/#/landing
+com.sssw.fw.directory.ICSLogoutEnabled=false
+DirectoryService/realms/jndi/params/USER_OBJECT=inetOrgPerson
+com.netiq.rbpm.landing.url=/idmdash/#/landing
+com.netiq.rpt.landing.url=/idmdash/#/landing
+com.netiq.idmdash.landing.url = /idmdash/#/landing
+com.sssw.fw.directory.ICSLogoutPage=https\://yourAccessGataewayServer/AGLogout
+com.netiq.idm.ua.logging-prefix=RBPM
+com.novell.srvprv.spi.email.notify.PORT=8080
+com.novell.srvprv.spi.email.notify.SECURE_PORT=___UA_TOMCAT_HTTPS_PORT___
+
+#
+com.netiq.idm.osp.oauth.issuer = ${com.netiq.idm.osp.url.host}/osp/a/idm/auth/oauth2
+com.netiq.idm.osp.oauth.access-token-format.format = jwt
+com.netiq.idm.osp.oauth.attr.roles.maxValues = 1
+com.netiq.idm.osp.token.init.cache.size = 1000
+com.netiq.idm.osp.token.max.cache.size = 16000
+com.netiq.idm.osp.oauth.dn = name
+com.netiq.idm.osp.oauth.first.name = first_name
+com.netiq.idm.osp.oauth.last.name = last_name
+com.netiq.idm.osp.oauth.initials = initials
+com.netiq.idm.osp.oauth.email = email
+com.netiq.idm.osp.oauth.language = language
+com.netiq.idm.osp.oauth.cacheable = cacheable
+com.netiq.idm.osp.oauth.expiration = expiration
+com.netiq.idm.osp.oauth.auth.src.id = auth_src_id
+com.netiq.idm.osp.oauth.client = client
+com.netiq.idm.osp.oauth.txn = txn
+
+#Added for Users list
+com.microfocus.idm.enable.vlv.count = true
+com.microfocus.idm.max.users.count.limit = 1000
+
+#For email based approval feature
+NotificationService/IncomingMail/EnableJMSPersistence=true
+NotificationService/IncomingMail/EmailConnectionTimeout=60000
+NotificationService/IncomingMail/MessagesPerConnection=20
+NotificationService/IncomingMail/Subscribers=incomingMail
+NotificationService/IncomingMail/JMSReconnectInterval=2000
+NotificationService/IncomingMail/JMSReconnectCount=3
+NotificationService/IncomingMail/MessageSelector=subscribers like '%incomingMail%'
+NotificationService/IncomingMail/TopicConnectionFactory/JNDI=jms/ConnectionFactory
+NotificationService/IncomingMail/Topic/JNDI=topic/EmailBasedApprovalTopic
+NotificationService/IncomingMail/TopicConnectionUsername/Subscriber=p_user
+NotificationService/IncomingMail/TopicConnectionPassword/Subscriber=changeit
+NotificationService/IncomingMail/TopicConnectionUsername/Publisher=p_user
+NotificationService/IncomingMail/TopicConnectionPassword/Publisher=changeit
+NotificationService/IncomingMail/TopicConnectionSubscriptionName=_incomingMailSubscriber0
+NotificationService/IncomingMail/MessageLife=36000000
+NotificationService/TopicConnectionFactory/JNDI = jms/ConnectionFactory
+

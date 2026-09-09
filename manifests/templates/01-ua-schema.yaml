@@ -1,0 +1,117 @@
+# ${LIFECYCLE_NAME} Job — schema (template; render with scripts/render.sh)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${LIFECYCLE_NAME}-01-ua-schema
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: ${LIFECYCLE_NAME}
+    app.kubernetes.io/component: schema
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: ${LIFECYCLE_NAME}
+        app.kubernetes.io/component: schema
+    spec:
+      restartPolicy: Never
+      serviceAccountName: ${LIFECYCLE_NAME}
+      hostAliases:
+        - ip: "${ENGINE_IP}"
+          hostnames:
+            - ${ENGINE_HOST}
+      volumes:
+        - name: shared
+          persistentVolumeClaim:
+            claimName: ${SHARED_PVC_NAME}
+        - name: lifecycle
+          configMap:
+            name: ${LIFECYCLE_NAME}-scripts
+            defaultMode: 0755
+        - name: lifecycle-lib
+          configMap:
+            name: ${LIFECYCLE_NAME}-lib
+            defaultMode: 0444
+      containers:
+        - name: schema
+          image: ${IMAGE_UA}
+          imagePullPolicy: ${IMAGE_PULL_POLICY}
+          command: ["/bin/bash", "/lifecycle/01-ua-schema.sh"]
+          env:
+            - name: ID_VAULT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${COMMON_PASSWORD_SECRET}
+                  key: ${COMMON_PASSWORD_KEY}
+            - name: UA_WFE_DATABASE_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: ${COMMON_PASSWORD_SECRET}
+                  key: ${COMMON_PASSWORD_KEY}
+            - name: UA_ADMIN_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: ${COMMON_PASSWORD_SECRET}
+                  key: ${COMMON_PASSWORD_KEY}
+            - name: SSO_SERVICE_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: ${COMMON_PASSWORD_SECRET}
+                  key: ${COMMON_PASSWORD_KEY}
+            - name: COMMON_KEYSTORE_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: ${KEYSTORE_SECRET}
+                  key: ${KEYSTORE_SECRET_KEY}
+            - name: MASTER_KEYSTORE_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: ${KEYSTORE_SECRET}
+                  key: ${KEYSTORE_SECRET_KEY}
+            - name: SHARED_CONFIG
+              value: "${SHARED_CONFIG}"
+            - name: ENGINE_HOST
+              value: "${ENGINE_HOST}"
+            - name: ENGINE_IP
+              value: "${ENGINE_IP}"
+            - name: PG_HOST
+              value: "${PG_HOST}"
+            - name: PG_PORT
+              value: "${PG_PORT}"
+            - name: EXT_HOST
+              value: "${PUBLIC_HOST}"
+            - name: EXT_URL
+              value: "${PUBLIC_BASE_URL}"
+            - name: INGRESS_IP
+              value: "${INGRESS_IP}"
+            - name: VAULT_ADMIN_DN
+              value: "${VAULT_ADMIN_DN}"
+            - name: UA_WFE_DATABASE_USER
+              value: "${UA_WFE_DATABASE_USER}"
+            - name: UA_DATABASE_NAME
+              value: "${UA_DB_NAME}"
+            - name: WFE_DATABASE_NAME
+              value: "${WFE_DB_NAME}"
+            - name: LIFECYCLE_LIB
+              value: "${LIFECYCLE_LIB}"
+            - name: UA_DRIVER_DN
+              value: "${UA_DRIVER_DN}"
+            - name: USER_CONTAINER
+              value: "${USER_CONTAINER}"
+            - name: UA_APP_CTX
+              value: "${UA_APP_CTX}"
+            - name: WFE_APP_CTX
+              value: "${WFE_APP_CTX}"
+            - name: LIQUIBASE_CONTEXTS
+              value: "${LIQUIBASE_CONTEXTS}"
+          volumeMounts:
+            - name: shared
+              mountPath: /config
+            - name: lifecycle
+              mountPath: /lifecycle
+              readOnly: true
+            - name: lifecycle-lib
+              mountPath: /lifecycle/lib
+              readOnly: true

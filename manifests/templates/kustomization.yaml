@@ -1,0 +1,12 @@
+# Optional: kubectl apply -k manifests/rendered/
+# Still requires ConfigMaps from scripts/apply.sh (scripts + jar).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ${NAMESPACE}
+resources:
+  - rbac.yaml
+  - 00-prereqs.yaml
+  - 01-ua-schema.yaml
+  - 02-configupdate.yaml
+  - 03-oauth-harden.yaml
+  - 04-smoke.yaml

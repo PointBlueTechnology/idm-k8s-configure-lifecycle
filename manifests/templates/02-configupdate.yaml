@@ -1,0 +1,129 @@
+# ${LIFECYCLE_NAME} Job — configupdate (template; render with scripts/render.sh)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${LIFECYCLE_NAME}-02-configupdate
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: ${LIFECYCLE_NAME}
+    app.kubernetes.io/component: configupdate
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: ${LIFECYCLE_NAME}
+        app.kubernetes.io/component: configupdate
+    spec:
+      restartPolicy: Never
+      serviceAccountName: ${LIFECYCLE_NAME}
+      hostAliases:
+        - ip: "${ENGINE_IP}"
+          hostnames:
+            - ${ENGINE_HOST}
+      volumes:
+        - name: shared
+          persistentVolumeClaim:
+            claimName: ${SHARED_PVC_NAME}
+        - name: lifecycle
+          configMap:
+            name: ${LIFECYCLE_NAME}-scripts
+            defaultMode: 0755
+        - name: lifecycle-lib
+          configMap:
+            name: ${LIFECYCLE_NAME}-lib
+            defaultMode: 0444
+      containers:
+        - name: configupdate
+          image: ${IMAGE_UA}
+          imagePullPolicy: ${IMAGE_PULL_POLICY}
+          command: ["/bin/bash", "/lifecycle/02-configupdate.sh"]
+          env:
+            - name: ID_VAULT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${COMMON_PASSWORD_SECRET}
+                  key: ${COMMON_PASSWORD_KEY}
+            - name: UA_WFE_DATABASE_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: ${COMMON_PASSWORD_SECRET}
+                  key: ${COMMON_PASSWORD_KEY}
+            - name: UA_ADMIN_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: ${COMMON_PASSWORD_SECRET}
+                  key: ${COMMON_PASSWORD_KEY}
+            - name: SSO_SERVICE_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: ${COMMON_PASSWORD_SECRET}
+                  key: ${COMMON_PASSWORD_KEY}
+            - name: COMMON_KEYSTORE_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: ${KEYSTORE_SECRET}
+                  key: ${KEYSTORE_SECRET_KEY}
+            - name: MASTER_KEYSTORE_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: ${KEYSTORE_SECRET}
+                  key: ${KEYSTORE_SECRET_KEY}
+            - name: SHARED_CONFIG
+              value: "${SHARED_CONFIG}"
+            - name: ENGINE_HOST
+              value: "${ENGINE_HOST}"
+            - name: ENGINE_IP
+              value: "${ENGINE_IP}"
+            - name: PG_HOST
+              value: "${PG_HOST}"
+            - name: PG_PORT
+              value: "${PG_PORT}"
+            - name: EXT_HOST
+              value: "${PUBLIC_HOST}"
+            - name: EXT_URL
+              value: "${PUBLIC_BASE_URL}"
+            - name: INGRESS_IP
+              value: "${INGRESS_IP}"
+            - name: VAULT_ADMIN_DN
+              value: "${VAULT_ADMIN_DN}"
+            - name: UA_WFE_DATABASE_USER
+              value: "${UA_WFE_DATABASE_USER}"
+            - name: UA_DATABASE_NAME
+              value: "${UA_DB_NAME}"
+            - name: WFE_DATABASE_NAME
+              value: "${WFE_DB_NAME}"
+            - name: LIFECYCLE_LIB
+              value: "${LIFECYCLE_LIB}"
+            - name: TMPL
+              value: /lifecycle/configupdate.properties.tmpl
+            - name: UA_DRIVER_CN
+              value: "${UA_DRIVER_CN}"
+            - name: UA_ADMIN_DN
+              value: "${UA_ADMIN_DN}"
+            - name: DRIVERSET_DN
+              value: "${DRIVERSET_DN}"
+            - name: USER_ROOT_CONTAINER
+              value: "${USER_ROOT_CONTAINER}"
+            - name: GROUP_ROOT_CONTAINER
+              value: "${GROUP_ROOT_CONTAINER}"
+            - name: ADMIN_CONTAINER
+              value: "${ADMIN_CONTAINER}"
+            - name: LDAP_PORT
+              value: "${LDAP_PORT}"
+            - name: LDAPS_PORT
+              value: "${LDAPS_PORT}"
+            - name: RESET_ISM
+              value: "${RESET_ISM}"
+            - name: UA_APP_CTX
+              value: "${UA_APP_CTX}"
+          volumeMounts:
+            - name: shared
+              mountPath: /config
+            - name: lifecycle
+              mountPath: /lifecycle
+              readOnly: true
+            - name: lifecycle-lib
+              mountPath: /lifecycle/lib
+              readOnly: true

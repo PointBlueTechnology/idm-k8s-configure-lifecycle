@@ -1,0 +1,38 @@
+# ServiceAccount + Role for lifecycle Jobs (scale UA, read secrets/CMs)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: idm-lifecycle
+  namespace: idm
+  labels:
+    app.kubernetes.io/part-of: idm-lifecycle
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: idm-lifecycle
+  namespace: idm
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "list", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/exec", "services", "secrets", "configmaps", "persistentvolumeclaims"]
+    verbs: ["get", "list", "create", "update", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: idm-lifecycle
+  namespace: idm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: idm-lifecycle
+subjects:
+  - kind: ServiceAccount
+    name: idm-lifecycle
+    namespace: idm
