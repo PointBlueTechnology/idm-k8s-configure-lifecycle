@@ -80,6 +80,10 @@ spec:
               value: "${PUBLIC_HOST}"
             - name: EXT_URL
               value: "${PUBLIC_BASE_URL}"
+            - name: UA_APP_CTX
+              value: "${UA_APP_CTX}"
+            - name: FORMRENDERER_CONFIG_DIR
+              value: "${FORMRENDERER_CONFIG_DIR}"
             - name: INGRESS_IP
               value: "${INGRESS_IP}"
             - name: VAULT_ADMIN_DN

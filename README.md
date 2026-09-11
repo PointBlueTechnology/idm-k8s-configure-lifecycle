@@ -53,7 +53,7 @@ docs/
 | wipe/reset | PASS — DROP SCHEMA + empty ism |
 | 01 schema | PASS — Liquibase UA+WFE |
 | 02 configupdate | PASS — vendor ConfigUpdate + authprops seed |
-| 03 oauth-harden | PASS — public redirects + ENCRYPT repair |
+| 03 oauth-harden | PASS — public redirects + tenant.http-interfaces + FormRenderer ServiceRegistry/OSP* + ENCRYPT repair |
 | 04 smoke | PASS — OSP/UA/dashboard HTTP checks |
 
 ## License / notice

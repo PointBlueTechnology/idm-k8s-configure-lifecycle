@@ -1,10 +1,14 @@
 #!/bin/bash
-# Job 03: force public OAuth redirects + ENCRYPT repair/audit
+# Job 03: public OAuth redirects + tenant.http-interfaces + FormRenderer ServiceRegistry/OSP* + ENCRYPT repair
 set -euo pipefail
 
 SHARED="${SHARED_CONFIG:-/config}"
 ISM="${SHARED}/userapp/tomcat/conf/ism-configuration.properties"
 EXT="${EXT_URL:?EXT_URL / PUBLIC_BASE_URL required}"
+UA_APP_CTX="${UA_APP_CTX:-IDMProv}"
+FR_DIR="${FORMRENDERER_CONFIG_DIR:-${SHARED}/FormRenderer}"
+FR_SR="${FR_DIR}/ServiceRegistry.json"
+FR_INI="${FR_DIR}/config.ini"
 KS="${SHARED}/userapp/tomcat/conf/encrypt-keys.pkcs12"
 JRE="${IDM_JRE_HOME:-/opt/netiq/common/jre}"
 CU=/opt/netiq/idm/apps/configupdate
@@ -47,9 +51,56 @@ set_prop "com.netiq.idm.osp.oauth.issuer" "${EXT}/osp/a/idm/auth/oauth2"
 set_prop "com.microfocus.idm.application.url" "${EXT}/IDMProv"
 set_prop "com.netiq.idm.forms.url.host" "${EXT}"
 set_prop "com.netiq.wf.engine.url" "${EXT}/workflow"
+set_prop "com.netiq.idm.osp.tenant.http-interfaces" "${EXT}"
 
-if grep -E 'redirect.url|osp.url.host' "$ISM" | grep -q identityapplications; then
-  echo "ERROR: in-cluster hostname still present in redirects" >&2
+# FormRenderer: public ServiceRegistry + OSP* in config.ini (shared PVC)
+# Traditional nginx/443 pattern: on k8s Ingress owns 443, but these files must still use PUBLIC_BASE_URL
+# (not Service DNS, not :8543).
+harden_formrenderer() {
+  mkdir -p "$FR_DIR"
+  if [ -f "$FR_SR" ] || [ -L "$FR_SR" ]; then
+    cp -a "$FR_SR" "${FR_SR}.bak-oauth-$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+  fi
+  # Exact JSON shape used by product (typo serviceRegisteries is intentional)
+  cat > "$FR_SR" <<EOF
+{"serviceRegisteries":[{"serviceID":"IDM","restUrl":"${EXT}/${UA_APP_CTX}"}]}
+EOF
+  echo "FormRenderer ServiceRegistry restUrl -> ${EXT}/${UA_APP_CTX}"
+
+  if [ -f "$FR_INI" ]; then
+    cp -a "$FR_INI" "${FR_INI}.bak-oauth-$(date +%Y%m%d%H%M%S)"
+    # Rewrite OSP* URL keys to PUBLIC_BASE_URL (leave ClientPass etc. alone)
+    if grep -q '^OSPIssuerUrl=' "$FR_INI"; then
+      sed -i "s|^OSPIssuerUrl=.*|OSPIssuerUrl=${EXT}/osp/a/idm/auth/oauth2|" "$FR_INI"
+    else
+      echo "OSPIssuerUrl=${EXT}/osp/a/idm/auth/oauth2" >> "$FR_INI"
+    fi
+    if grep -q '^OSPRedirectUrl=' "$FR_INI"; then
+      sed -i "s|^OSPRedirectUrl=.*|OSPRedirectUrl=${EXT}/forms/oauth.html|" "$FR_INI"
+    else
+      echo "OSPRedirectUrl=${EXT}/forms/oauth.html" >> "$FR_INI"
+    fi
+    if grep -q '^OSPLogoutUrl=' "$FR_INI"; then
+      sed -i "s|^OSPLogoutUrl=.*|OSPLogoutUrl=${EXT}/osp/a/idm/auth/app/logout|" "$FR_INI"
+    else
+      echo "OSPLogoutUrl=${EXT}/osp/a/idm/auth/app/logout" >> "$FR_INI"
+    fi
+    echo "FormRenderer config.ini OSP* -> ${EXT}"
+  else
+    echo "WARN: FormRenderer config.ini missing at $FR_INI (skipped OSP* rewrite)" >&2
+  fi
+
+  if grep -E 'identityapplications|:8543' "$FR_SR" >/dev/null 2>&1; then
+    echo "ERROR: FormRenderer ServiceRegistry still has in-cluster URL" >&2
+    cat "$FR_SR" >&2
+    exit 1
+  fi
+}
+harden_formrenderer
+
+
+if grep -E 'redirect.url|osp.url.host|tenant.http-interfaces' "$ISM" | grep -qE 'identityapplications|:8543'; then
+  echo "ERROR: in-cluster hostname still present in redirects/tenant.http-interfaces" >&2
   exit 1
 fi
 

@@ -80,6 +80,10 @@ spec:
               value: "idm.example.com"
             - name: EXT_URL
               value: "https://idm.example.com"
+            - name: UA_APP_CTX
+              value: "${UA_APP_CTX}"
+            - name: FORMRENDERER_CONFIG_DIR
+              value: "${FORMRENDERER_CONFIG_DIR}"
             - name: INGRESS_IP
               value: "192.0.2.20"
             - name: VAULT_ADMIN_DN

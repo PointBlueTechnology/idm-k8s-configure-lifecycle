@@ -53,7 +53,7 @@ Individual:
 ./scripts/apply.sh --reset-prepare   # DESTRUCTIVE
 ./scripts/apply.sh --schema
 ./scripts/apply.sh --configupdate
-./scripts/apply.sh --oauth
+./scripts/apply.sh --oauth   # public redirects + tenant.http-interfaces + FormRenderer ServiceRegistry/config.ini
 # scale happens inside --all; or: kubectl -n $NS scale deploy/$UA_DEPLOYMENT_NAME --replicas=1
 ./scripts/apply.sh --smoke
 ```
@@ -96,5 +96,6 @@ Engine / eDirectory are **not** wiped by this package.
 
 - **Keystore secret literal**: Job 00 fails if password is the string `$COMMON_KEYSTORE_PWD`.
 - **OAuth invalid request**: Job 03 must run so redirects use `PUBLIC_BASE_URL`, not Service DNS.
+- **FormRenderer ServiceRegistry**: Helm/configure often leaves `restUrl` as `https://identityapplications:8543/IDMProv`. Job 03 rewrites `/config/FormRenderer/ServiceRegistry.json` to `${PUBLIC_BASE_URL}/IDMProv` and forces FormRenderer `config.ini` `OSP*` URLs to `PUBLIC_BASE_URL`. Also sets `com.netiq.idm.osp.tenant.http-interfaces` on ism. Traditional installs put nginx on 443 for the same role; on k8s **Ingress owns 443**, but ServiceRegistry + ism tenant + sites/`config.ini` must still be the public URL.
 - **encrypt-keys missing**: Job 02 copies from container FS when possible; Job 03 may force NONE+plaintext for known secrets (lab path). Prefer persisting encrypt-keys beside ism on the shared volume.
 - **Liquibase path errors**: Confirm image tag matches 4.10.2 layout (`IDMdb`, `IDMwfdb`).

@@ -13,7 +13,8 @@
 | Knob | Why |
 |------|-----|
 | `NAMESPACE`, `SHARED_PVC_NAME` | Cluster objects |
-| `PUBLIC_HOST`, `PUBLIC_BASE_URL`, `INGRESS_IP` | OAuth redirects + smoke |
+| `PUBLIC_HOST`, `PUBLIC_BASE_URL`, `INGRESS_IP` | OAuth redirects + smoke + FormRenderer ServiceRegistry/OSP* + ism `tenant.http-interfaces` |
+| `UA_APP_CTX`, `FORMRENDERER_CONFIG_DIR` | ServiceRegistry restUrl path (`/IDMProv`) + FormRenderer PVC dir |
 | `ENGINE_HOST`, `ENGINE_IP` | hostAliases + LDAP/JDBC targets |
 | `PG_HOST`, DB names/user | Liquibase + Wipe |
 | `IMAGE_UA` | Must match installed Helm chart image |
@@ -44,3 +45,14 @@ Sites on different chart versions, secret key names, or non-Helm installs must a
 - Pre-baked Job YAML with live site values (use render)
 - Guaranteed encrypt-keys persistence (known residual; Job 03 force-repairs for lab)
 - OpenText support entitlement
+
+## Public URL pattern (traditional nginx vs k8s Ingress)
+
+Traditional IDM apps install often terminates TLS with **nginx on 443** and sets public URLs in:
+
+- FormRenderer / sites `ServiceRegistry.json` (`restUrl`)
+- FormRenderer / sites `config.ini` (`OSP*` URLs)
+- UA `ism-configuration.properties` (`com.netiq.idm.osp.tenant.http-interfaces` + OAuth redirects)
+- OSP `global.properties`, SSPR, etc.
+
+On Kubernetes, **Ingress already owns 443**. You still must set ServiceRegistry + ism `tenant.http-interfaces` + FormRenderer `config.ini` to `PUBLIC_BASE_URL` — Job 03 does this. Do **not** leave `https://identityapplications:8543/...` in FormRenderer ServiceRegistry (browser-facing clients cannot use in-cluster Service DNS or `:8543`).
