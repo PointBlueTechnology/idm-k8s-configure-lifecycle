@@ -50,6 +50,7 @@ set_prop "com.netiq.client.authserver.url.revoke" "${EXT}/osp/a/idm/auth/oauth2/
 set_prop "com.netiq.idm.osp.oauth.issuer" "${EXT}/osp/a/idm/auth/oauth2"
 set_prop "com.microfocus.idm.application.url" "${EXT}/IDMProv"
 set_prop "com.netiq.idm.forms.url.host" "${EXT}"
+set_prop "com.netiq.idm.forms.url.context" "forms"
 set_prop "com.netiq.wf.engine.url" "${EXT}/workflow"
 set_prop "com.netiq.idm.osp.tenant.http-interfaces" "${EXT}"
 
@@ -97,6 +98,38 @@ EOF
   fi
 }
 harden_formrenderer
+
+# OSP global.properties often keeps cluster DNS for forms.redirect after CU;
+# idmdash/FR need the public redirect. Align GLOBAL-* copies too.
+harden_osp_forms_redirect() {
+  local osp_conf="${SHARED}/osp/osp/conf"
+  local public_redir="${EXT}/forms/oauth.html"
+  shopt -s nullglob
+  for f in "${osp_conf}/global.properties" "${osp_conf}"/GLOBAL-*.properties; do
+    [ -f "$f" ] || continue
+    if grep -q "com.netiq.forms.redirect.url" "$f"; then
+      sed -i "s|^com.netiq.forms.redirect.url[[:space:]]*=.*|com.netiq.forms.redirect.url = ${public_redir}|" "$f"
+    else
+      echo "com.netiq.forms.redirect.url = ${public_redir}" >> "$f"
+    fi
+    if grep -q "formrenderer:8600" "$f"; then
+      echo "ERROR: OSP still has formrenderer:8600 in $f" >&2
+      grep -n "formrenderer" "$f" >&2 || true
+      exit 1
+    fi
+    echo "OSP forms.redirect -> ${public_redir} ($f)"
+  done
+  local osp_ism="${SHARED}/osp/tomcat/conf/ism-configuration.properties"
+  if [ -f "$osp_ism" ]; then
+    if grep -q "^com.netiq.forms.redirect.url" "$osp_ism"; then
+      sed -i "s|^com.netiq.forms.redirect.url[[:space:]]*=.*|com.netiq.forms.redirect.url = ${public_redir}|" "$osp_ism"
+    else
+      echo "com.netiq.forms.redirect.url = ${public_redir}" >> "$osp_ism"
+    fi
+  fi
+}
+harden_osp_forms_redirect
+
 
 
 if grep -E 'redirect.url|osp.url.host|tenant.http-interfaces' "$ISM" | grep -qE 'identityapplications|:8543'; then
