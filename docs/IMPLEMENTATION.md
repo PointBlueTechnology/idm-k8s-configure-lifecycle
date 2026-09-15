@@ -99,3 +99,16 @@ Engine / eDirectory are **not** wiped by this package.
 - **FormRenderer ServiceRegistry**: Helm/configure often leaves `restUrl` as `https://identityapplications:8543/IDMProv`. Job 03 rewrites `/config/FormRenderer/ServiceRegistry.json` to `${PUBLIC_BASE_URL}/IDMProv` and forces FormRenderer `config.ini` `OSP*` URLs to `PUBLIC_BASE_URL`. Also sets `com.netiq.idm.osp.tenant.http-interfaces` on ism. Traditional installs put nginx on 443 for the same role; on k8s **Ingress owns 443**, but ServiceRegistry + ism tenant + sites/`config.ini` must still be the public URL.
 - **encrypt-keys missing**: Job 02 copies from container FS when possible; Job 03 may force NONE+plaintext for known secrets (lab path). Prefer persisting encrypt-keys beside ism on the shared volume.
 - **Liquibase path errors**: Confirm image tag matches 4.10.2 layout (`IDMdb`, `IDMwfdb`).
+
+## Engine host: eDirectory interfaces (Designer / NCP)
+
+After Identity Engine configure, ensure `n4u.server.interfaces` (and http/https.server.interfaces) list **IPv4@port only** — never the Engine FQDN. Hostnames produce `Incorrect interface parameter: <fqdn>` and break some Designer Identity Vault connections.
+
+On the Engine Docker host:
+
+```bash
+./scripts/engine-fix-nds-interfaces.sh --container engine-container --keep-ip <ENGINE_IP> --restart
+```
+
+Also: vault LDAP requires StartTLS or LDAPS; Job 00 already uses StartTLS to `ENGINE_IP`. Prefer Engine **IP** (not FQDN) as the Designer server address.
+

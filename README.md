@@ -59,3 +59,7 @@ docs/
 ## License / notice
 
 See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). Provided as-is for collaboration with OpenText; no warranty.
+
+## Engine host helper
+
+`scripts/engine-fix-nds-interfaces.sh` — remove FQDNs from eDirectory listen interfaces (IPs only) after Engine configure; needed for reliable Designer/NCP. See `docs/IMPLEMENTATION.md`.
