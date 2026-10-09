@@ -84,6 +84,12 @@ spec:
                       optional: true
                 - name: VAULT_TARGET
                   value: "${VAULT_TARGET}"
+                - name: VAULT_WORKLOAD_KIND
+                  value: "${VAULT_WORKLOAD_KIND}"
+                - name: VAULT_WORKLOAD_NAME
+                  value: "${VAULT_WORKLOAD_NAME}"
+                - name: VAULT_DOCKER_SUDO
+                  value: "${VAULT_DOCKER_SUDO}"
                 - name: VAULT_SSH_HOST
                   value: "${VAULT_SSH_HOST}"
                 - name: VAULT_SSH_PORT

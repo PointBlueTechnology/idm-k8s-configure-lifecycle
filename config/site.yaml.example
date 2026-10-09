@@ -27,9 +27,15 @@ backup:
   retentionCount: 14
   includeNici: true
   includeStreams: true
-  target: ssh-docker
+  # standalone: engine container on a host outside the cluster.
+  # k8s: engine container is a pod (set workloadKind/workloadName instead of ssh).
+  target: standalone
   sshHost: 192.0.2.10
   dockerContainer: engine-container
+  dockerSudo: false
+  workloadKind: deployment
+  workloadName: ""
+  podContainer: ""
   ndsConf: /etc/opt/novell/eDirectory/conf/nds.conf
   secrets:
     niciBackup:

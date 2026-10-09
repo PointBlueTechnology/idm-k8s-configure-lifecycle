@@ -83,7 +83,13 @@ spec:
                       key: password
                       optional: true
                 - name: VAULT_TARGET
-                  value: "ssh-docker"
+                  value: "standalone"
+                - name: VAULT_WORKLOAD_KIND
+                  value: ""
+                - name: VAULT_WORKLOAD_NAME
+                  value: ""
+                - name: VAULT_DOCKER_SUDO
+                  value: "false"
                 - name: VAULT_SSH_HOST
                   value: "192.0.2.10"
                 - name: VAULT_SSH_PORT

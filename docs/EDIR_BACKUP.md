@@ -75,17 +75,45 @@ A backup with `includeNici: true` is a copy of the Identity Vault **and** the NI
 
 `includeNici: false` avoids putting NICI keys in the backup store. It does **not** make the `.bak` harmless: the DIB still contains the tree, password hashes, and driver secrets. Protect that PVC either way.
 
-## Targets
+## Where the engine container runs
 
-`VAULT_TARGET`:
+One CronJob covers both layouts. Set `VAULT_TARGET`.
 
-| Value | What the CronJob does |
-|-------|------------------------|
-| `incluster` | `kubectl exec` into one Running pod. Set `VAULT_POD_NAME`, or `VAULT_POD_LABEL_SELECTOR`, or `VAULT_SERVICE_NAME` (first Endpoints `targetRef`). Exactly one pod or the job fails. |
-| `ssh-docker` | SSH to `VAULT_SSH_HOST` and `docker exec` into `VAULT_DOCKER_CONTAINER` (default `engine-container`). This is the hybrid shape: vault on a Docker host, IdApps in the cluster. |
-| `ssh` | SSH to a host where eDirectory is installed and run `dsbk` there (no Docker). |
+| `VAULT_TARGET` | Engine container | What the job does |
+|----------------|------------------|-------------------|
+| `standalone` | On a host outside the cluster (Docker or Podman) | SSH to `VAULT_SSH_HOST` and `docker exec` (or `VAULT_DOCKER_BIN`) into `VAULT_DOCKER_CONTAINER`. Set `VAULT_DOCKER_SUDO=true` when the SSH user must run `sudo -n docker`. |
+| `k8s` | A pod in this cluster | `kubectl exec` into that pod. |
 
-`VAULT_POD_NAMESPACE` defaults to `NAMESPACE`. If the engine pod is in another namespace, grant `${LIFECYCLE_NAME}-edir-backup` `pods/exec` there yourself. The Role shipped here is namespace-local and can exec any pod in `NAMESPACE`, which is what in-cluster mode needs.
+`ssh-docker` is an alias of `standalone`. `incluster` is an alias of `k8s`. `ssh` is the other case: eDirectory installed on the host, not in a container.
+
+### Stand-alone host (`standalone`)
+
+The host is the machine that runs the engine container. That is often the same address as `ENGINE_IP`, and it can be a different admin address. The container name in the OpenText engine examples is `engine-container`; set `VAULT_DOCKER_CONTAINER` to yours.
+
+`dsbk` runs inside that container. The job copies the backup set back over SSH onto the PVC. The SSH key and `known_hosts` are required (below). No Kubernetes exec permission is used.
+
+### Kubernetes (`k8s`)
+
+The job finds exactly one Running pod, then execs into the engine container:
+
+1. `VAULT_POD_NAME` if you set it
+2. Otherwise `VAULT_WORKLOAD_NAME` plus `VAULT_WORKLOAD_KIND` (`deployment` or `statefulset`). The pod is chosen with that workload's selector.
+3. Otherwise `VAULT_POD_LABEL_SELECTOR`
+4. Otherwise `VAULT_SERVICE_NAME` (Endpoints `targetRef`)
+
+`VAULT_POD_NAMESPACE` defaults to `NAMESPACE`. If the pod has one container, that container is used. If it has several, set `VAULT_POD_CONTAINER` to the engine container. More than one Running pod is an error.
+
+The backup ServiceAccount can `get` Deployments and StatefulSets and `exec` into pods in `NAMESPACE`. If the engine is in another namespace, grant that Role there yourself. SSH is not used.
+
+Example:
+
+```bash
+VAULT_TARGET=k8s
+VAULT_WORKLOAD_KIND=deployment
+VAULT_WORKLOAD_NAME=identityengine
+VAULT_POD_CONTAINER=identityengine
+VAULT_POD_NAMESPACE=idm
+```
 
 SSH uses Secret `${VAULT_SSH_SECRET}` (default `idm-vault-ssh`):
 
@@ -94,7 +122,7 @@ SSH uses Secret `${VAULT_SSH_SECRET}` (default `idm-vault-ssh`):
 
 The login shell on the SSH host must be able to run `base64 -d` (the NICI password is passed base64-encoded so the remote command stays POSIX-quoted). `docker exec` / `sudo` still place the decoded password in `dsbk`'s argv.
 
-`VAULT_NDS_CONF` default is `/etc/opt/novell/eDirectory/conf/nds.conf`, the path `scripts/engine-fix-nds-interfaces.sh` uses inside the IDM engine container. A standalone eDirectory 25.4 container uses `/config/eDirectory/inst/conf/nds.conf` instead. Set the knob to the instance you are backing up.
+`VAULT_NDS_CONF` default is `/etc/opt/novell/eDirectory/conf/nds.conf`, the path `scripts/engine-fix-nds-interfaces.sh` uses inside the IDM engine container. The eDirectory-only 25.4 container image documents `/config/eDirectory/inst/conf/nds.conf` instead. Set the knob to the instance you are backing up.
 
 ## Install
 

@@ -24,7 +24,7 @@
 - **03** rewrites OAuth redirect URLs to the **public** base URL (not in-cluster Service DNS) and repairs undecryptable ENCRYPT values when encrypt-keys were not persisted.
 - **04** curls public paths via `--resolve` to the ingress IP.
 
-The vault backup CronJob is not in that chain. It runs on its own schedule against the Identity Engine (in-cluster, or SSH to an external Docker host / eDirectory server) and writes a timestamped `dsbk` set to a separate PVC. See `docs/EDIR_BACKUP.md`.
+The vault backup CronJob is not in that chain. It runs `dsbk` inside the Identity Engine container whether that container is on a stand-alone host (`VAULT_TARGET=standalone`) or is a pod in the cluster (`VAULT_TARGET=k8s`), and writes a timestamped backup set to a separate PVC. See `docs/EDIR_BACKUP.md`.
 
 ## Why Jobs
 

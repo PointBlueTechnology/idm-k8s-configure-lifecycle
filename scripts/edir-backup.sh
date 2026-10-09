@@ -33,8 +33,26 @@ VAULT_POD_NAMESPACE="${VAULT_POD_NAMESPACE:-${NAMESPACE:-}}"
 BACKUP_ACTIVE_DEADLINE_SECONDS="${BACKUP_ACTIVE_DEADLINE_SECONDS:-7200}"
 KUBECTL_CONTAINER_ARGS=()
 SSH_CMD=()
+DOCKER_REMOTE=${VAULT_DOCKER_BIN}
 
 flag_word() { if is_true "$1"; then printf 'true'; else printf 'false'; fi; }
+
+# Canonical targets:
+#   standalone — engine container on a host outside the cluster (SSH + docker exec)
+#   k8s        — engine container is a pod in this cluster (kubectl exec)
+#   ssh        — eDirectory installed on the host, not in a container
+# ssh-docker is an alias of standalone. incluster is an alias of k8s.
+normalize_vault_target() {
+  local raw
+  raw=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
+  case "$raw" in
+    standalone|ssh-docker) printf 'standalone\n' ;;
+    k8s|kubernetes|incluster) printf 'k8s\n' ;;
+    ssh) printf 'ssh\n' ;;
+    dry-run) printf 'dry-run\n' ;;
+    *) return 1 ;;
+  esac
+}
 
 dsbk_flag_summary() {
   local flags="-b -w --config-file ${VAULT_NDS_CONF}"
@@ -169,16 +187,40 @@ nici_remote_assign() {
   printf "NICI_BACKUP_PASSWORD=\$(printf '%%s' '%s' | base64 -d)" "$b64"
 }
 
+workload_resource() {
+  case "$(printf '%s' "${1:-deployment}" | tr '[:upper:]' '[:lower:]')" in
+    deployment|deploy) printf 'deployment\n' ;;
+    statefulset|sts) printf 'statefulset\n' ;;
+    *) die "VAULT_WORKLOAD_KIND must be deployment or statefulset (got ${1})" ;;
+  esac
+}
+
+# One Running pod for the in-cluster engine container.
+# Order: VAULT_POD_NAME, then VAULT_WORKLOAD_NAME (Deployment/StatefulSet selector),
+# then VAULT_POD_LABEL_SELECTOR, then VAULT_SERVICE_NAME.
 resolve_incluster_pod() {
-  local ns pods count
-  command -v kubectl >/dev/null 2>&1 || die "kubectl is required for VAULT_TARGET=incluster (set IMAGE_VAULT_BACKUP to an image that includes it)"
+  local ns pods count selector raw kind
+  command -v kubectl >/dev/null 2>&1 || die "kubectl is required for VAULT_TARGET=k8s (set IMAGE_VAULT_BACKUP to an image that includes it)"
   ns=${VAULT_POD_NAMESPACE:-}
-  [ -n "$ns" ] || die "VAULT_POD_NAMESPACE (or NAMESPACE) is required for incluster"
+  [ -n "$ns" ] || die "VAULT_POD_NAMESPACE (or NAMESPACE) is required when the engine container runs in the cluster"
   if [ -n "${VAULT_POD_NAME:-}" ]; then
     printf '%s\n' "$VAULT_POD_NAME"
     return
   fi
-  if [ -n "${VAULT_POD_LABEL_SELECTOR:-}" ]; then
+  if [ -n "${VAULT_WORKLOAD_NAME:-}" ]; then
+    kind=$(workload_resource "${VAULT_WORKLOAD_KIND:-deployment}")
+    # shellcheck disable=SC2016 # go-template, not a shell expansion
+    raw=$(kubectl get "$kind" -n "$ns" "$VAULT_WORKLOAD_NAME" \
+      -o go-template='{{range $k,$v := .spec.selector.matchLabels}}{{$k}}={{$v}},{{end}}')
+    selector=${raw%,}
+    [ -n "$selector" ] || die "${kind}/${VAULT_WORKLOAD_NAME} in ${ns} has no pod selector"
+    # Do not log here: this function's stdout is the pod name.
+    WORKLOAD_SELECTOR=$selector
+    WORKLOAD_KIND_RESOLVED=$kind
+    pods=$(kubectl get pods -n "$ns" -l "$selector" \
+      --field-selector=status.phase=Running \
+      -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
+  elif [ -n "${VAULT_POD_LABEL_SELECTOR:-}" ]; then
     pods=$(kubectl get pods -n "$ns" -l "$VAULT_POD_LABEL_SELECTOR" \
       --field-selector=status.phase=Running \
       -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
@@ -186,12 +228,33 @@ resolve_incluster_pod() {
     pods=$(kubectl get endpoints -n "$ns" "$VAULT_SERVICE_NAME" \
       -o jsonpath='{range .subsets[*].addresses[*]}{.targetRef.name}{"\n"}{end}')
   else
-    die "incluster target needs VAULT_POD_NAME, VAULT_POD_LABEL_SELECTOR, or VAULT_SERVICE_NAME"
+    die "k8s target needs VAULT_WORKLOAD_NAME, VAULT_POD_NAME, VAULT_POD_LABEL_SELECTOR, or VAULT_SERVICE_NAME"
   fi
   pods=$(printf '%s\n' "$pods" | sed '/^$/d')
   count=$(printf '%s\n' "$pods" | sed '/^$/d' | wc -l | tr -d ' ')
-  [ "$count" = "1" ] || die "expected exactly one running vault pod, found ${count}: ${pods:-<none>}"
+  [ "$count" = "1" ] || die "expected exactly one running engine pod, found ${count}: ${pods:-<none>}"
   printf '%s\n' "$pods"
+}
+
+# Use VAULT_POD_CONTAINER when set. A single-container pod is used as-is.
+# Several containers require the engine container name.
+resolve_engine_container() {
+  local names count listed
+  if [ -n "${VAULT_POD_CONTAINER:-}" ]; then
+    KUBECTL_CONTAINER_ARGS=(-c "$VAULT_POD_CONTAINER")
+    return
+  fi
+  names=$(kubectl get pod -n "$VAULT_POD_NAMESPACE" "$VAULT_POD" \
+    -o jsonpath='{range .spec.containers[*]}{.name}{"\n"}{end}')
+  names=$(printf '%s\n' "$names" | sed '/^$/d')
+  count=$(printf '%s\n' "$names" | sed '/^$/d' | wc -l | tr -d ' ')
+  if [ "$count" = "1" ]; then
+    VAULT_POD_CONTAINER=$names
+    KUBECTL_CONTAINER_ARGS=(-c "$VAULT_POD_CONTAINER")
+    return
+  fi
+  listed=$(printf '%s\n' "$names" | tr '\n' ',' | sed 's/,$//')
+  die "engine pod ${VAULT_POD} has ${count} containers (${listed}). Set VAULT_POD_CONTAINER to the engine container."
 }
 
 docker_user_args() {
@@ -220,8 +283,8 @@ run_in_vault() {
       printf 'remote-args: %s\n' "$qargs"
       cat
       ;;
-    incluster)
-      command -v kubectl >/dev/null 2>&1 || die "kubectl is required for VAULT_TARGET=incluster"
+    k8s)
+      command -v kubectl >/dev/null 2>&1 || die "kubectl is required for VAULT_TARGET=k8s"
       if [ -n "${VAULT_EXEC_USER:-}" ]; then
         if is_true "$INCLUDE_NICI"; then
           kubectl exec -i -n "$VAULT_POD_NAMESPACE" "$VAULT_POD" "${KUBECTL_CONTAINER_ARGS[@]}" -- \
@@ -238,19 +301,19 @@ run_in_vault() {
           bash -s -- "$@"
       fi
       ;;
-    ssh-docker)
-      [ -n "${VAULT_DOCKER_CONTAINER:-}" ] || die "VAULT_DOCKER_CONTAINER is required for ssh-docker"
+    standalone)
+      [ -n "${VAULT_DOCKER_CONTAINER:-}" ] || die "standalone target needs VAULT_DOCKER_CONTAINER (engine container name on the host)"
       user_prefix=$(docker_user_args)
       if is_true "$INCLUDE_NICI"; then
         assign=$(nici_remote_assign)
         # Remote login shell decodes the password; docker exec -e forwards it.
         # shellcheck disable=SC2029
         "${SSH_CMD[@]}" "${VAULT_SSH_USER}@${VAULT_SSH_HOST}" \
-          "${assign}; ${VAULT_DOCKER_BIN} exec -i -e NICI_BACKUP_PASSWORD=\"\$NICI_BACKUP_PASSWORD\" ${user_prefix}${VAULT_DOCKER_CONTAINER} bash -s -- ${qargs}"
+          "${assign}; ${DOCKER_REMOTE} exec -i -e NICI_BACKUP_PASSWORD=\"\$NICI_BACKUP_PASSWORD\" ${user_prefix}${VAULT_DOCKER_CONTAINER} bash -s -- ${qargs}"
       else
         # shellcheck disable=SC2029
         "${SSH_CMD[@]}" "${VAULT_SSH_USER}@${VAULT_SSH_HOST}" \
-          "${VAULT_DOCKER_BIN} exec -i ${user_prefix}${VAULT_DOCKER_CONTAINER} bash -s -- ${qargs}"
+          "${DOCKER_REMOTE} exec -i ${user_prefix}${VAULT_DOCKER_CONTAINER} bash -s -- ${qargs}"
       fi
       ;;
     ssh)
@@ -277,7 +340,7 @@ run_in_vault() {
       fi
       ;;
     *)
-      die "VAULT_TARGET must be incluster, ssh-docker, ssh, or dry-run"
+      die "VAULT_TARGET must be standalone, k8s, ssh, or dry-run"
       ;;
   esac
 }
@@ -286,7 +349,7 @@ copy_from_vault() {
   local path=$1 quoted
   quoted=$(printf '%q' "$path")
   case "$VAULT_TARGET" in
-    incluster)
+    k8s)
       if [ -n "${VAULT_EXEC_USER:-}" ]; then
         kubectl exec -n "$VAULT_POD_NAMESPACE" "$VAULT_POD" "${KUBECTL_CONTAINER_ARGS[@]}" -- \
           sudo -n -u "$VAULT_EXEC_USER" cat "$path"
@@ -295,10 +358,10 @@ copy_from_vault() {
           cat "$path"
       fi
       ;;
-    ssh-docker)
+    standalone)
       # shellcheck disable=SC2029
       "${SSH_CMD[@]}" "${VAULT_SSH_USER}@${VAULT_SSH_HOST}" \
-        "${VAULT_DOCKER_BIN} exec -i $(docker_user_args)${VAULT_DOCKER_CONTAINER} cat ${quoted}"
+        "${DOCKER_REMOTE} exec -i $(docker_user_args)${VAULT_DOCKER_CONTAINER} cat ${quoted}"
       ;;
     ssh)
       if [ -n "${VAULT_EXEC_USER:-}" ]; then
@@ -320,15 +383,15 @@ remove_remote_staging() {
   local path=$1 quoted
   [ -n "$path" ] || return 0
   [ "$VAULT_TARGET" = "dry-run" ] && return 0
-  if [ "$VAULT_TARGET" = "incluster" ] && [ -z "${VAULT_POD:-}" ]; then
+  if [ "$VAULT_TARGET" = "k8s" ] && [ -z "${VAULT_POD:-}" ]; then
     return 0
   fi
-  if [ "$VAULT_TARGET" = "ssh" ] || [ "$VAULT_TARGET" = "ssh-docker" ]; then
+  if [ "$VAULT_TARGET" = "ssh" ] || [ "$VAULT_TARGET" = "standalone" ]; then
     [ "${#SSH_CMD[@]}" -gt 0 ] || return 0
   fi
   quoted=$(printf '%q' "$path")
   case "$VAULT_TARGET" in
-    incluster)
+    k8s)
       if [ -n "${VAULT_EXEC_USER:-}" ]; then
         kubectl exec -n "$VAULT_POD_NAMESPACE" "$VAULT_POD" "${KUBECTL_CONTAINER_ARGS[@]}" -- \
           sudo -n -u "$VAULT_EXEC_USER" rm -rf "$path" || true
@@ -337,10 +400,10 @@ remove_remote_staging() {
           rm -rf "$path" || true
       fi
       ;;
-    ssh-docker)
+    standalone)
       # shellcheck disable=SC2029
       "${SSH_CMD[@]}" "${VAULT_SSH_USER}@${VAULT_SSH_HOST}" \
-        "${VAULT_DOCKER_BIN} exec -i $(docker_user_args)${VAULT_DOCKER_CONTAINER} rm -rf ${quoted}" || true
+        "${DOCKER_REMOTE} exec -i $(docker_user_args)${VAULT_DOCKER_CONTAINER} rm -rf ${quoted}" || true
       ;;
     ssh)
       if [ -n "${VAULT_EXEC_USER:-}" ]; then
@@ -385,11 +448,20 @@ release_lock() {
 }
 
 validate() {
-  [ -n "$VAULT_TARGET" ] || die "VAULT_TARGET is required (incluster, ssh-docker, or ssh)"
-  case "$VAULT_TARGET" in
-    incluster|ssh-docker|ssh|dry-run) ;;
-    *) die "VAULT_TARGET must be incluster, ssh-docker, ssh, or dry-run" ;;
-  esac
+  local canon
+  [ -n "$VAULT_TARGET" ] || die "VAULT_TARGET is required: standalone (engine container on a host) or k8s (engine container in the cluster)"
+  canon=$(normalize_vault_target "$VAULT_TARGET") \
+    || die "VAULT_TARGET must be standalone or k8s (aliases ssh-docker and incluster). Use ssh only when eDirectory is installed on the host and not in a container."
+  VAULT_TARGET=$canon
+  if [ "$VAULT_TARGET" = "standalone" ]; then
+    [ -n "${VAULT_DOCKER_CONTAINER:-}" ] || die "standalone target needs VAULT_DOCKER_CONTAINER (engine container name on the host)"
+    [ -n "${VAULT_SSH_HOST:-}" ] || die "standalone target needs VAULT_SSH_HOST (the host running the engine container)"
+    [ -n "${VAULT_SSH_USER:-}" ] || die "standalone target needs VAULT_SSH_USER"
+  elif [ "$VAULT_TARGET" = "k8s" ]; then
+    if [ -z "${VAULT_POD_NAME:-}${VAULT_WORKLOAD_NAME:-}${VAULT_POD_LABEL_SELECTOR:-}${VAULT_SERVICE_NAME:-}" ]; then
+      die "k8s target needs VAULT_WORKLOAD_NAME, VAULT_POD_NAME, VAULT_POD_LABEL_SELECTOR, or VAULT_SERVICE_NAME"
+    fi
+  fi
   case "$INCLUDE_NICI" in
     1|0|true|TRUE|false|FALSE|yes|YES|no|NO|on|ON|off|OFF) ;;
     *) die "INCLUDE_NICI must be true or false" ;;
@@ -439,15 +511,21 @@ main() {
   trap 'remove_remote_staging "${REMOTE_STAGING:-}"; release_lock' EXIT
 
   KUBECTL_CONTAINER_ARGS=()
-  if [ "$VAULT_TARGET" = "incluster" ]; then
+  DOCKER_REMOTE=${VAULT_DOCKER_BIN}
+  if is_true "${VAULT_DOCKER_SUDO:-false}"; then
+    DOCKER_REMOTE="sudo -n ${VAULT_DOCKER_BIN}"
+  fi
+  if [ "$VAULT_TARGET" = "k8s" ]; then
     VAULT_POD=$(resolve_incluster_pod)
-    log "vault pod=${VAULT_POD} namespace=${VAULT_POD_NAMESPACE} container=${VAULT_POD_CONTAINER:-<default>}"
-    if [ -n "${VAULT_POD_CONTAINER:-}" ]; then
-      KUBECTL_CONTAINER_ARGS=(-c "$VAULT_POD_CONTAINER")
-    fi
-  elif [ "$VAULT_TARGET" = "ssh-docker" ] || [ "$VAULT_TARGET" = "ssh" ]; then
+    resolve_engine_container
+    log "k8s engine pod=${VAULT_POD} namespace=${VAULT_POD_NAMESPACE} container=${VAULT_POD_CONTAINER} workload=${WORKLOAD_KIND_RESOLVED:-<direct>}/${VAULT_WORKLOAD_NAME:-} selector=${WORKLOAD_SELECTOR:-<none>}"
+  elif [ "$VAULT_TARGET" = "standalone" ] || [ "$VAULT_TARGET" = "ssh" ]; then
     prepare_ssh
-    log "ssh ${VAULT_SSH_USER}@${VAULT_SSH_HOST}:${VAULT_SSH_PORT} container=${VAULT_DOCKER_CONTAINER:-n/a}"
+    if [ "$VAULT_TARGET" = "standalone" ]; then
+      log "standalone engine host=${VAULT_SSH_USER}@${VAULT_SSH_HOST}:${VAULT_SSH_PORT} container=${VAULT_DOCKER_CONTAINER}"
+    else
+      log "ssh eDirectory host=${VAULT_SSH_USER}@${VAULT_SSH_HOST}:${VAULT_SSH_PORT}"
+    fi
   fi
 
   manifest=$(mktemp)

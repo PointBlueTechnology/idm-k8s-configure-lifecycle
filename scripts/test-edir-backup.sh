@@ -162,4 +162,79 @@ grep -q 'super-secret-nici' "$SSH_LOG" && fail "NICI password appeared on the SS
 grep -q 'base64 -d' "$SSH_LOG" || fail "SSH command did not decode the NICI password"
 grep -q 'bash -s' "$SSH_LOG" || fail "SSH command did not run the remote script"
 
+[ "$(normalize_vault_target standalone)" = "standalone" ] || fail "standalone alias"
+[ "$(normalize_vault_target ssh-docker)" = "standalone" ] || fail "ssh-docker should be standalone"
+[ "$(normalize_vault_target k8s)" = "k8s" ] || fail "k8s alias"
+[ "$(normalize_vault_target incluster)" = "k8s" ] || fail "incluster should be k8s"
+[ "$(normalize_vault_target K8s)" = "k8s" ] || fail "case fold"
+[ "$(workload_resource deploy)" = "deployment" ] || fail "deploy kind"
+[ "$(workload_resource statefulset)" = "statefulset" ] || fail "sts kind"
+
+if env VAULT_TARGET=k8s INCLUDE_NICI=false \
+  VAULT_POD_NAME= VAULT_WORKLOAD_NAME= VAULT_POD_LABEL_SELECTOR= VAULT_SERVICE_NAME= \
+  "$SCRIPT" >/dev/null 2>"$tmp/err"; then
+  fail "k8s without a pod selector should fail"
+fi
+grep -q 'VAULT_WORKLOAD_NAME' "$tmp/err" || fail "expected k8s selector error, got: $(cat "$tmp/err")"
+
+if env VAULT_TARGET=standalone INCLUDE_NICI=false \
+  VAULT_DOCKER_CONTAINER= VAULT_SSH_HOST=backup.example VAULT_SSH_USER=backup \
+  "$SCRIPT" >/dev/null 2>"$tmp/err"; then
+  fail "standalone without a container name should fail"
+fi
+grep -q 'VAULT_DOCKER_CONTAINER' "$tmp/err" || fail "expected container-name error, got: $(cat "$tmp/err")"
+
+# In-cluster engine: fake kubectl resolves a Deployment to one pod and one container.
+kbin=$tmp/kbin
+mkdir -p "$kbin" "$tmp/k8s-dest"
+cat > "$kbin/kubectl" <<'EOF'
+#!/bin/bash
+line="$*"
+if [ -n "${NICI_BACKUP_PASSWORD:-}" ]; then
+  line=${line//${NICI_BACKUP_PASSWORD}/***REDACTED***}
+fi
+printf '%s\n' "$line" >> "${KUBECTL_LOG:?}"
+if [[ "$*" == *" bash -s "* ]]; then
+  cat >/dev/null
+  printf 'FILE edir.bak\nFILE edir.log\nFILE edir.out\nDONE\n'
+elif [[ "$*" == *" rm "* ]]; then
+  exit 0
+elif [[ "$*" == *" cat "* ]]; then
+  printf 'k8s-backup-bytes'
+elif [[ "$*" == *"matchLabels"* ]]; then
+  printf 'app=identityengine,'
+elif [[ "$*" == *"spec.containers"* ]]; then
+  printf 'identityengine\n'
+elif [[ "$*" == *"metadata.name"* ]]; then
+  printf 'engine-pod-0\n'
+else
+  echo "unexpected kubectl: $*" >&2
+  exit 1
+fi
+EOF
+chmod +x "$kbin/kubectl"
+export KUBECTL_LOG="$tmp/kubectl-cmds"
+export PATH="$kbin:/usr/bin:/bin"
+export VAULT_TARGET=k8s
+export VAULT_POD_NAMESPACE=idm
+export VAULT_WORKLOAD_KIND=deployment
+export VAULT_WORKLOAD_NAME=identityengine
+export VAULT_POD_NAME=
+export VAULT_POD_LABEL_SELECTOR=
+export VAULT_SERVICE_NAME=
+export VAULT_POD_CONTAINER=
+export BACKUP_DEST="$tmp/k8s-dest"
+export INCLUDE_NICI=true
+export NICI_BACKUP_PASSWORD='super-secret-nici'
+export VAULT_EXEC_USER=
+"$SCRIPT" >"$tmp/k8s-job.log"
+grep -q 'EDIR BACKUP OK' "$tmp/k8s-job.log" || fail "k8s backup failed: $(cat "$tmp/k8s-job.log")"
+grep -q 'k8s engine pod=engine-pod-0' "$tmp/k8s-job.log" || fail "did not log resolved pod"
+grep -q 'container=identityengine' "$tmp/k8s-job.log" || fail "did not log engine container"
+kbak=$(find "$tmp/k8s-dest" -maxdepth 1 -type f -name 'edir-*.bak' | head -1)
+[ "$(cat "$kbak")" = "k8s-backup-bytes" ] || fail "k8s bak contents"
+grep -q 'get deployment' "$KUBECTL_LOG" || fail "did not read the engine deployment"
+grep -q -- '-c identityengine' "$KUBECTL_LOG" || fail "exec did not target the engine container"
+grep -q 'super-secret-nici' "$KUBECTL_LOG" && fail "NICI password left in kubectl log"
+
 echo "OK test-edir-backup"
