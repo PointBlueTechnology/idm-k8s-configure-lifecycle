@@ -10,7 +10,7 @@ STAGE=""
 
 usage() {
   cat <<USAGE
-Usage: $0 [--dry-run] (--prereqs|--schema|--configupdate|--oauth|--smoke|--all|--reset-prepare|--render-only)
+Usage: $0 [--dry-run] (--prereqs|--schema|--configupdate|--oauth|--smoke|--all|--reset-prepare|--render-only|--backup|--backup-now)
 
   --dry-run         Print plan / client-validate manifests; do not wait on Jobs
   --render-only     Only run scripts/render.sh
@@ -21,18 +21,21 @@ Usage: $0 [--dry-run] (--prereqs|--schema|--configupdate|--oauth|--smoke|--all|-
   --smoke           Job 04 only
   --reset-prepare   Scale UA 0, wipe UA/WFE public schemas, reset ism (keeps Engine)
   --all             prereqs → reset-prepare → schema → configupdate → oauth → scale UA 1 → smoke
+  --backup          Install the eDirectory backup CronJob (does not run a backup)
+  --backup-now      Install the CronJob and run one Job from it
 
 Requires config/site.env (see config/site.env.example).
 
 WARNING: --all / --reset-prepare mutate shared-volume ism and Postgres UA/WFE schemas.
 Backup NFS ism + pg_dump both DBs before running.
+The vault backup CronJob is separate: see docs/EDIR_BACKUP.md.
 USAGE
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
-    --prereqs|--schema|--configupdate|--oauth|--smoke|--all|--reset-prepare|--render-only)
+    --prereqs|--schema|--configupdate|--oauth|--smoke|--all|--reset-prepare|--render-only|--backup|--backup-now)
       STAGE="${1#--}"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; exit 1 ;;
@@ -69,6 +72,8 @@ ensure_scripts_cm() {
     --from-file="$ROOT/scripts/03-oauth-harden.sh" \
     --from-file="$ROOT/scripts/04-smoke.sh" \
     --from-file="$ROOT/scripts/99-wipe-schema.sh" \
+    --from-file="$ROOT/scripts/edir-backup.sh" \
+    --from-file="$ROOT/scripts/edir-backup-remote.sh" \
     --from-file=configupdate.properties.tmpl="$ROOT/templates/configupdate.properties.tmpl" \
     --dry-run=client -o yaml | $KUBECTL "${apply_cmd[@]}" -f -
   echo "Building ConfigMap ${LC}-lib"
@@ -130,6 +135,28 @@ reset_prepare() {
   $KUBECTL -n "$NS" logs "job/${LC}-wipe-schema" --tail=50 || true
 }
 
+install_backup_cronjob() {
+  echo "==== apply cronjob ${LC}-edir-backup (dry_run=$DRY_RUN) ===="
+  if [ "$DRY_RUN" = 1 ]; then
+    $KUBECTL apply --dry-run=client -f "$RENDERED/edir-backup-cronjob.yaml"
+  else
+    $KUBECTL apply -f "$RENDERED/edir-backup-cronjob.yaml"
+  fi
+}
+
+run_backup_now() {
+  local job
+  job="${LC}-edir-backup-manual-$(date -u +%Y%m%d%H%M%S)"
+  echo "==== one-shot job ${job} from cronjob/${LC}-edir-backup ===="
+  if [ "$DRY_RUN" = 1 ]; then
+    echo "(dry-run) would: kubectl -n ${NS} create job --from=cronjob/${LC}-edir-backup ${job}"
+    return 0
+  fi
+  $KUBECTL -n "$NS" create job "--from=cronjob/${LC}-edir-backup" "$job"
+  $KUBECTL -n "$NS" wait --for=condition=complete "job/${job}" --timeout=120m
+  $KUBECTL -n "$NS" logs "job/${job}" --tail=80 || true
+}
+
 render
 if [ "$STAGE" = "render-only" ]; then
   echo "DONE stage=render-only"
@@ -145,6 +172,13 @@ case "$STAGE" in
   configupdate) run_job "$RENDERED/02-configupdate.yaml" ;;
   oauth) run_job "$RENDERED/03-oauth-harden.yaml" ;;
   smoke) run_job "$RENDERED/04-smoke.yaml" ;;
+  backup)
+    install_backup_cronjob
+    ;;
+  backup-now)
+    install_backup_cronjob
+    run_backup_now
+    ;;
   reset-prepare) reset_prepare ;;
   all)
     run_job "$RENDERED/00-prereqs.yaml"

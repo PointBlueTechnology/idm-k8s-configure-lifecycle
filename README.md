@@ -11,6 +11,7 @@ Job-based **configure** for OpenText Identity Manager 25.4 / Identity Applicatio
 | [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md) | Site engineer implementing from this package |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Deployments run / Jobs configure |
 | [`docs/PORTABILITY.md`](docs/PORTABILITY.md) | What is portable vs site-supplied |
+| [`docs/EDIR_BACKUP.md`](docs/EDIR_BACKUP.md) | Identity Vault `dsbk` backup, restore, on-demand run |
 | [`config/site.env.example`](config/site.env.example) | **Single source of truth** for site knobs |
 
 ## Principle
@@ -40,8 +41,10 @@ examples/overlays/example.com/  # rendered fake-site examples
 scripts/apply.sh            # operator wrapper (render → ConfigMaps → Jobs)
 scripts/render.sh           # envsubst templates → manifests/rendered/
 scripts/*.sh                # Job entrypoints (env-driven)
+scripts/edir-backup.sh      # CronJob entrypoint (dsbk hot backup)
 scripts/lib/idm-lifecycle-lib.jar
 templates/configupdate.properties.tmpl
+images/edir-backup/         # CronJob image (bash, ssh, kubectl)
 docs/
 ```
 
@@ -63,3 +66,7 @@ See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). Provided as-is for collaboratio
 ## Engine host helper
 
 `scripts/engine-fix-nds-interfaces.sh` — remove FQDNs from eDirectory listen interfaces (IPs only) after Engine configure; needed for reliable Designer/NCP. See `docs/IMPLEMENTATION.md`.
+
+## Identity Vault backup
+
+`./scripts/apply.sh --backup` installs a CronJob that runs `dsbk` against the vault (in-cluster pod, SSH to a Docker host, or SSH to an eDirectory host) and writes timestamped files to a backup PVC. `INCLUDE_NICI` / `includeNici` defaults to **true**. Restore, retention, and one-shot runs: [`docs/EDIR_BACKUP.md`](docs/EDIR_BACKUP.md).

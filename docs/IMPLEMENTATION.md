@@ -92,6 +92,25 @@ Full cold path:
 
 Engine / eDirectory are **not** wiped by this package.
 
+## Identity Vault backup
+
+Install the CronJob (does not run a backup, and is not part of `--all`):
+
+```bash
+./scripts/apply.sh --backup
+```
+
+Run once:
+
+```bash
+./scripts/apply.sh --backup-now
+# or:
+kubectl -n "$NAMESPACE" create job --from=cronjob/${LIFECYCLE_NAME}-edir-backup \
+  ${LIFECYCLE_NAME}-edir-backup-manual-$(date -u +%Y%m%d%H%M%S)
+```
+
+What is in the backup, `includeNici` (default **true**), and restore with vs without NICI: [`docs/EDIR_BACKUP.md`](EDIR_BACKUP.md). The pre-wipe copy of `ism` and `pg_dump` above is still required; this CronJob does not replace it.
+
 ## Troubleshooting
 
 - **Keystore secret literal**: Job 00 fails if password is the string `$COMMON_KEYSTORE_PWD`.

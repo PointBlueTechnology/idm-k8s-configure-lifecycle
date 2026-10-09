@@ -10,3 +10,4 @@ resources:
   - 02-configupdate.yaml
   - 03-oauth-harden.yaml
   - 04-smoke.yaml
+  - edir-backup-cronjob.yaml
