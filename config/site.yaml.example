@@ -19,3 +19,28 @@ secrets:
   keystore:
     name: identity-manager-key-store-pwd
     key: keystore-pwd
+# Identity Vault backup. includeNici defaults to true (dsbk -e). See docs/EDIR_BACKUP.md.
+backup:
+  schedule: "0 2 * * *"
+  timeZone: UTC
+  pvcName: idm-vault-backup
+  retentionCount: 14
+  includeNici: true
+  includeStreams: true
+  # standalone: engine container on a host outside the cluster.
+  # k8s: engine container is a pod (set workloadKind/workloadName instead of ssh).
+  target: standalone
+  sshHost: 192.0.2.10
+  dockerContainer: engine-container
+  dockerSudo: false
+  workloadKind: deployment
+  workloadName: ""
+  podContainer: ""
+  ndsConf: /etc/opt/novell/eDirectory/conf/nds.conf
+  secrets:
+    niciBackup:
+      name: idm-nici-backup
+      key: password
+    ssh:
+      name: idm-vault-ssh
+      key: ssh-privatekey

@@ -1,0 +1,143 @@
+# idm-lifecycle CronJob — eDirectory hot backup (template; render with scripts/render.sh)
+# On demand: kubectl -n idm create job --from=cronjob/idm-lifecycle-edir-backup idm-lifecycle-edir-backup-manual
+# Mechanism and restore: docs/EDIR_BACKUP.md
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: idm-lifecycle-edir-backup
+  namespace: idm
+  labels:
+    app.kubernetes.io/part-of: idm-lifecycle
+    app.kubernetes.io/component: edir-backup
+spec:
+  schedule: "0 2 * * *"
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 86400
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: idm-lifecycle
+            app.kubernetes.io/component: edir-backup
+        spec:
+          restartPolicy: Never
+          terminationGracePeriodSeconds: 60
+          serviceAccountName: idm-lifecycle-edir-backup
+          automountServiceAccountToken: true
+          securityContext:
+            fsGroup: 0
+          hostAliases:
+            - ip: "192.0.2.10"
+              hostnames:
+                - idm-engine.example.com
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: idm-vault-backup
+            - name: lifecycle
+              configMap:
+                name: idm-lifecycle-scripts
+                defaultMode: 0755
+            - name: ssh
+              secret:
+                secretName: idm-vault-ssh
+                optional: true
+                defaultMode: 0400
+          containers:
+            - name: edir-backup
+              image: edir-backup:local
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/bash", "/lifecycle/edir-backup.sh"]
+              env:
+                - name: BACKUP_DEST
+                  value: "/backups/edir"
+                - name: BACKUP_PREFIX
+                  value: "edir"
+                - name: BACKUP_RETENTION_COUNT
+                  value: "14"
+                - name: BACKUP_RETENTION_DAYS
+                  value: "0"
+                - name: BACKUP_ACTIVE_DEADLINE_SECONDS
+                  value: "7200"
+                - name: INCLUDE_NICI
+                  value: "true"
+                - name: INCLUDE_STREAMS
+                  value: "true"
+                - name: INCLUDE_NDS_CONF
+                  value: "true"
+                - name: NICI_BACKUP_SECRET
+                  value: "idm-nici-backup"
+                - name: NICI_BACKUP_SECRET_KEY
+                  value: "password"
+                - name: NICI_BACKUP_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: idm-nici-backup
+                      key: password
+                      optional: true
+                - name: VAULT_TARGET
+                  value: "standalone"
+                - name: VAULT_WORKLOAD_KIND
+                  value: ""
+                - name: VAULT_WORKLOAD_NAME
+                  value: ""
+                - name: VAULT_DOCKER_SUDO
+                  value: "false"
+                - name: VAULT_SSH_HOST
+                  value: "192.0.2.10"
+                - name: VAULT_SSH_PORT
+                  value: "22"
+                - name: VAULT_SSH_USER
+                  value: "backup"
+                - name: VAULT_SSH_SECRET
+                  value: "idm-vault-ssh"
+                - name: VAULT_SSH_SECRET_KEY
+                  value: "ssh-privatekey"
+                - name: VAULT_SSH_KNOWN_HOSTS_KEY
+                  value: "known_hosts"
+                - name: VAULT_SSH_STRICT_HOST_KEY
+                  value: "yes"
+                - name: VAULT_DOCKER_BIN
+                  value: "docker"
+                - name: VAULT_DOCKER_CONTAINER
+                  value: "engine-container"
+                - name: VAULT_EXEC_USER
+                  value: ""
+                - name: VAULT_POD_NAME
+                  value: ""
+                - name: VAULT_POD_LABEL_SELECTOR
+                  value: ""
+                - name: VAULT_SERVICE_NAME
+                  value: ""
+                - name: VAULT_POD_NAMESPACE
+                  value: "idm"
+                - name: VAULT_POD_CONTAINER
+                  value: ""
+                - name: VAULT_NDS_CONF
+                  value: "/etc/opt/novell/eDirectory/conf/nds.conf"
+                - name: VAULT_STAGING_DIR
+                  value: "/tmp/idm-edir-backup"
+                - name: VAULT_DSBK_BIN
+                  value: "dsbk"
+                - name: NAMESPACE
+                  value: "idm"
+                - name: ENGINE_HOST
+                  value: "idm-engine.example.com"
+                - name: ENGINE_IP
+                  value: "192.0.2.10"
+              volumeMounts:
+                - name: backup
+                  mountPath: /backups
+                - name: lifecycle
+                  mountPath: /lifecycle
+                  readOnly: true
+                - name: ssh
+                  mountPath: /secrets/ssh
+                  readOnly: true

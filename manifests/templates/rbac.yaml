@@ -36,3 +36,54 @@ subjects:
   - kind: ServiceAccount
     name: ${LIFECYCLE_NAME}
     namespace: ${NAMESPACE}
+---
+# Backup CronJob SA. It can exec into namespace pods (in-cluster vault) but
+# cannot read Secrets through the API. The NICI password and SSH key are
+# mounted into the pod by the kubelet.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${LIFECYCLE_NAME}-edir-backup
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: ${LIFECYCLE_NAME}
+    app.kubernetes.io/component: edir-backup
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ${LIFECYCLE_NAME}-edir-backup
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: ${LIFECYCLE_NAME}
+    app.kubernetes.io/component: edir-backup
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["services", "endpoints"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ${LIFECYCLE_NAME}-edir-backup
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: ${LIFECYCLE_NAME}
+    app.kubernetes.io/component: edir-backup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ${LIFECYCLE_NAME}-edir-backup
+subjects:
+  - kind: ServiceAccount
+    name: ${LIFECYCLE_NAME}-edir-backup
+    namespace: ${NAMESPACE}

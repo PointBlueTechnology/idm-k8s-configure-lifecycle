@@ -22,6 +22,11 @@
 | Secret names/keys | Password + keystore |
 | LDAP DNs / containers | Match your tree |
 | `LIFECYCLE_NAME` | Object naming prefix (default `idm-lifecycle`) |
+| `VAULT_TARGET` | `standalone` (engine container on a host) or `k8s` (engine container is a pod) |
+| SSH knobs, or workload/pod/Service knobs, `VAULT_NDS_CONF` | How the job reaches that container |
+| `BACKUP_PVC_NAME`, schedule, retention | Vault backup destination and how many sets to keep |
+| `INCLUDE_NICI` (`includeNici`, default **true**) | Whether `dsbk -e` stores NICI key material in the backup |
+| `NICI_BACKUP_SECRET`, `VAULT_SSH_SECRET` | Secret **names** only — never the password or the SSH key |
 
 ## OpenText Helm / image assumptions (still coupled)
 

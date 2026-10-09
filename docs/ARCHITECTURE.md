@@ -6,6 +6,7 @@
 |-------|------|------------------|
 | Helm / Deployments | Long-running UA, OSP, reporting, SSPR pods; Service/Ingress | One-shot schema, ism generation, OAuth URL repair |
 | Lifecycle Jobs (this repo) | Prereq gates, Liquibase, ConfigUpdate, OAuth harden, smoke | Serving traffic |
+| Vault backup CronJob (this repo) | Hot `dsbk` backup of one Identity Vault, copied to a backup PVC | App configure, Postgres, or `ism` |
 | Shared RWX PVC | `ism-configuration.properties`, `idm.jks`, optional `encrypt-keys.pkcs12` | — |
 | Postgres | UA + WFE schemas created by Job 01 | Engine eDirectory data |
 | Engine (often hybrid/out-of-cluster) | Identity Vault, drivers | App configure |
@@ -22,6 +23,8 @@
 - **02** runs vendor `RunConfigUpdate` from a full `configupdate.properties` template; seeds authprops.
 - **03** rewrites OAuth redirect URLs to the **public** base URL (not in-cluster Service DNS) and repairs undecryptable ENCRYPT values when encrypt-keys were not persisted.
 - **04** curls public paths via `--resolve` to the ingress IP.
+
+The vault backup CronJob is not in that chain. It runs `dsbk` inside the Identity Engine container whether that container is on a stand-alone host (`VAULT_TARGET=standalone`) or is a pod in the cluster (`VAULT_TARGET=k8s`), and writes a timestamped backup set to a separate PVC. See `docs/EDIR_BACKUP.md`.
 
 ## Why Jobs
 

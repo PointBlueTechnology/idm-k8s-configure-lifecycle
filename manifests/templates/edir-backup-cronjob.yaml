@@ -1,0 +1,143 @@
+# ${LIFECYCLE_NAME} CronJob — eDirectory hot backup (template; render with scripts/render.sh)
+# On demand: kubectl -n ${NAMESPACE} create job --from=cronjob/${LIFECYCLE_NAME}-edir-backup ${LIFECYCLE_NAME}-edir-backup-manual
+# Mechanism and restore: docs/EDIR_BACKUP.md
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ${LIFECYCLE_NAME}-edir-backup
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: ${LIFECYCLE_NAME}
+    app.kubernetes.io/component: edir-backup
+spec:
+  schedule: "${BACKUP_SCHEDULE}"
+  timeZone: "${BACKUP_TIMEZONE}"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 86400
+      activeDeadlineSeconds: ${BACKUP_ACTIVE_DEADLINE_SECONDS}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: ${LIFECYCLE_NAME}
+            app.kubernetes.io/component: edir-backup
+        spec:
+          restartPolicy: Never
+          terminationGracePeriodSeconds: 60
+          serviceAccountName: ${LIFECYCLE_NAME}-edir-backup
+          automountServiceAccountToken: true
+          securityContext:
+            fsGroup: ${BACKUP_FS_GROUP}
+          hostAliases:
+            - ip: "${ENGINE_IP}"
+              hostnames:
+                - ${ENGINE_HOST}
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: ${BACKUP_PVC_NAME}
+            - name: lifecycle
+              configMap:
+                name: ${LIFECYCLE_NAME}-scripts
+                defaultMode: 0755
+            - name: ssh
+              secret:
+                secretName: ${VAULT_SSH_SECRET}
+                optional: true
+                defaultMode: 0400
+          containers:
+            - name: edir-backup
+              image: ${IMAGE_VAULT_BACKUP}
+              imagePullPolicy: ${IMAGE_PULL_POLICY}
+              command: ["/bin/bash", "/lifecycle/edir-backup.sh"]
+              env:
+                - name: BACKUP_DEST
+                  value: "${BACKUP_DEST}"
+                - name: BACKUP_PREFIX
+                  value: "${BACKUP_PREFIX}"
+                - name: BACKUP_RETENTION_COUNT
+                  value: "${BACKUP_RETENTION_COUNT}"
+                - name: BACKUP_RETENTION_DAYS
+                  value: "${BACKUP_RETENTION_DAYS}"
+                - name: BACKUP_ACTIVE_DEADLINE_SECONDS
+                  value: "${BACKUP_ACTIVE_DEADLINE_SECONDS}"
+                - name: INCLUDE_NICI
+                  value: "${INCLUDE_NICI}"
+                - name: INCLUDE_STREAMS
+                  value: "${INCLUDE_STREAMS}"
+                - name: INCLUDE_NDS_CONF
+                  value: "${INCLUDE_NDS_CONF}"
+                - name: NICI_BACKUP_SECRET
+                  value: "${NICI_BACKUP_SECRET}"
+                - name: NICI_BACKUP_SECRET_KEY
+                  value: "${NICI_BACKUP_SECRET_KEY}"
+                - name: NICI_BACKUP_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${NICI_BACKUP_SECRET}
+                      key: ${NICI_BACKUP_SECRET_KEY}
+                      optional: true
+                - name: VAULT_TARGET
+                  value: "${VAULT_TARGET}"
+                - name: VAULT_WORKLOAD_KIND
+                  value: "${VAULT_WORKLOAD_KIND}"
+                - name: VAULT_WORKLOAD_NAME
+                  value: "${VAULT_WORKLOAD_NAME}"
+                - name: VAULT_DOCKER_SUDO
+                  value: "${VAULT_DOCKER_SUDO}"
+                - name: VAULT_SSH_HOST
+                  value: "${VAULT_SSH_HOST}"
+                - name: VAULT_SSH_PORT
+                  value: "${VAULT_SSH_PORT}"
+                - name: VAULT_SSH_USER
+                  value: "${VAULT_SSH_USER}"
+                - name: VAULT_SSH_SECRET
+                  value: "${VAULT_SSH_SECRET}"
+                - name: VAULT_SSH_SECRET_KEY
+                  value: "${VAULT_SSH_SECRET_KEY}"
+                - name: VAULT_SSH_KNOWN_HOSTS_KEY
+                  value: "${VAULT_SSH_KNOWN_HOSTS_KEY}"
+                - name: VAULT_SSH_STRICT_HOST_KEY
+                  value: "${VAULT_SSH_STRICT_HOST_KEY}"
+                - name: VAULT_DOCKER_BIN
+                  value: "${VAULT_DOCKER_BIN}"
+                - name: VAULT_DOCKER_CONTAINER
+                  value: "${VAULT_DOCKER_CONTAINER}"
+                - name: VAULT_EXEC_USER
+                  value: "${VAULT_EXEC_USER}"
+                - name: VAULT_POD_NAME
+                  value: "${VAULT_POD_NAME}"
+                - name: VAULT_POD_LABEL_SELECTOR
+                  value: "${VAULT_POD_LABEL_SELECTOR}"
+                - name: VAULT_SERVICE_NAME
+                  value: "${VAULT_SERVICE_NAME}"
+                - name: VAULT_POD_NAMESPACE
+                  value: "${VAULT_POD_NAMESPACE}"
+                - name: VAULT_POD_CONTAINER
+                  value: "${VAULT_POD_CONTAINER}"
+                - name: VAULT_NDS_CONF
+                  value: "${VAULT_NDS_CONF}"
+                - name: VAULT_STAGING_DIR
+                  value: "${VAULT_STAGING_DIR}"
+                - name: VAULT_DSBK_BIN
+                  value: "${VAULT_DSBK_BIN}"
+                - name: NAMESPACE
+                  value: "${NAMESPACE}"
+                - name: ENGINE_HOST
+                  value: "${ENGINE_HOST}"
+                - name: ENGINE_IP
+                  value: "${ENGINE_IP}"
+              volumeMounts:
+                - name: backup
+                  mountPath: /backups
+                - name: lifecycle
+                  mountPath: /lifecycle
+                  readOnly: true
+                - name: ssh
+                  mountPath: /secrets/ssh
+                  readOnly: true
